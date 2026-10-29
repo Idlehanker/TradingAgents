@@ -225,7 +225,10 @@ def test_a_streamed_run_reads_its_own_graph_config(tmp_path, monkeypatch, offlin
     graph = _graph(tmp_path, monkeypatch, ScriptedModel(), output_language="French")
     set_config({"output_language": "German"})
     seen = []
-    monkeypatch.setitem(router.VENDOR_METHODS["get_stock_data"], "yfinance",
+    # The vendor that answers first is the one whose call sees the run's config;
+    # which vendor that is belongs to the config, not to this test.
+    lead = DEFAULT_CONFIG["data_vendors"]["core_stock_apis"].split(",")[0]
+    monkeypatch.setitem(router.VENDOR_METHODS["get_stock_data"], lead,
                         lambda *a, **k: seen.append(get_config()["output_language"]) or "prices")
 
     between = [get_config()["output_language"]

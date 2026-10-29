@@ -16,6 +16,8 @@ whichever vendor served it.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from datetime import datetime
 from typing import Annotated
 
@@ -45,6 +47,30 @@ DEFAULT_BARS = 1200
 _LOT_MARKETS = ("sh", "sz")
 
 _PRICE_COLUMNS = ("Open", "High", "Low", "Close")
+
+# How long one fetch serves the rest of the process. A run reads the same window
+# once per indicator plus once for the verified snapshot; without this, those are
+# a dozen requests, each answering with a slightly different intraday bar — so the
+# report would quote two closes for the same session, and the vendor sees a burst.
+FETCH_TTL_SECONDS = 900
+
+_FETCHED: dict[tuple, tuple[float, pd.DataFrame]] = {}
+
+# Analysts issue their tool calls in parallel, so the first reads of one symbol
+# race. One fetch at a time keeps them from each making their own.
+_FETCH_LOCK = threading.Lock()
+
+
+def _remember(key: tuple, frame: pd.DataFrame) -> pd.DataFrame:
+    _FETCHED[key] = (time.monotonic(), frame)
+    return frame
+
+
+def _recall(key: tuple) -> pd.DataFrame | None:
+    hit = _FETCHED.get(key)
+    if hit is None or time.monotonic() - hit[0] > FETCH_TTL_SECONDS:
+        return None
+    return hit[1]
 
 
 def _request(code: str, start: str = "", end: str = "", count: int = DEFAULT_BARS) -> list[list]:
@@ -107,12 +133,26 @@ def fetch_daily(
     Raises VendorUnavailableError when Tencent could not be reached and
     NoMarketDataError when it answered with nothing — the same taxonomy the
     router reacts on, whatever the vendor.
+
+    A fetch is remembered for ``FETCH_TTL_SECONDS``: one run reads the same
+    window for every indicator and the snapshot, and the vendor's newest bar
+    moves while the market is open.
     """
     canonical = normalize_symbol(symbol)
-    for code in candidate_codes(canonical):
-        rows = _request(code, start_date or "", end_date or "", count)
-        if rows:
-            return code, _frame(rows, code)
+    key = (canonical, start_date or "", end_date or "", count)
+    # An analyst issues its tool calls together, so the first reads of one symbol
+    # race each other; without the lock each would fetch, and each fetch can return
+    # a different intraday bar for the same session.
+    with _FETCH_LOCK:
+        remembered = _recall(key)
+        if remembered is not None:
+            return remembered.attrs["code"], remembered
+        for code in candidate_codes(canonical):
+            rows = _request(code, start_date or "", end_date or "", count)
+            if rows:
+                frame = _frame(rows, code)
+                frame.attrs["code"] = code
+                return code, _remember(key, frame)
     _raise_for_empty(symbol, canonical, start_date, end_date)
     raise AssertionError("unreachable")  # _raise_for_empty always raises
 
@@ -126,9 +166,16 @@ def get_stock_data(
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
 
-    code, data = fetch_daily(symbol, start_date, end_date)
     start, end = pd.Timestamp(start_date), pd.Timestamp(end_date)
-    data = data[(data["Date"] >= start) & (data["Date"] <= end)]
+    # Read the window out of the run's history fetch rather than asking for it
+    # again: two fetches of the same session return a close that differs by a
+    # cent while the market is open, and a report may not quote both. A range
+    # older than the history window is asked for directly instead.
+    code, history = fetch_daily(symbol)
+    data = history[(history["Date"] >= start) & (history["Date"] <= end)]
+    if data.empty and start < history["Date"].min():
+        code, window = fetch_daily(symbol, start_date, end_date)
+        data = window[(window["Date"] >= start) & (window["Date"] <= end)]
     if data.empty:
         _raise_for_empty(symbol, normalize_symbol(symbol), start_date, end_date)
 

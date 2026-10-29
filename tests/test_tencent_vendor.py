@@ -45,8 +45,11 @@ def _response(payload):
 @pytest.fixture(autouse=True)
 def _reset_config():
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    # A fetched window is remembered for the process; each test starts with none.
+    kline._FETCHED.clear()
     yield
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    kline._FETCHED.clear()
 
 
 def test_symbol_maps_to_tencent_code():
@@ -102,6 +105,86 @@ def test_load_ohlcv_excludes_rows_after_as_of_date():
 
     assert data["Date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-06-01", "2026-06-02"]
     assert data["Close"].tolist() == [102.0, 104.0]
+
+
+def test_one_fetch_serves_the_rest_of_the_run():
+    """A run reads the same window for every indicator plus the snapshot; the
+    vendor's newest bar moves intraday, so a second fetch would contradict the first."""
+    with mock.patch.object(kline.requests, "get", return_value=_response(_payload(_ROWS))) as get:
+        first = kline.load_ohlcv("600519.SS", "2026-06-02")
+        second = kline.load_ohlcv("600519.SS", "2026-06-02")
+
+    assert get.call_count == 1
+    assert first["Close"].tolist() == second["Close"].tolist()
+
+
+def test_the_csv_and_the_snapshot_quote_one_close():
+    """Both read the session out of the run's single fetch: a report that quotes
+    the CSV's close in one paragraph and the snapshot's in the next is not
+    reporting one market."""
+    later = _payload([[*row] for row in _ROWS])
+    later["data"]["sh600519"]["qfqday"][-1][2] = "999.00"   # a second print moved
+    with mock.patch.object(kline.requests, "get",
+                           side_effect=[_response(_payload(_ROWS)), _response(later)]) as get:
+        csv = kline.get_stock_data("600519.SS", "2026-06-01", "2026-06-06")
+        data = kline.load_ohlcv("600519.SS", "2026-06-06")
+
+    assert get.call_count == 1
+    assert "103.00" in csv                  # the first fetch's close, not 999.00
+    assert data["Close"].tolist()[-1] == 103.0
+
+
+def test_concurrent_first_reads_make_one_fetch():
+    """An analyst issues its tool calls together; the parallel reads of one
+    symbol must not each fetch, or the report quotes several closes for it."""
+    import threading
+    import time
+
+    calls = []
+
+    def slow_get(*args, **kwargs):
+        calls.append(1)
+        time.sleep(0.05)          # long enough for the other thread to arrive too
+        return _response(_payload(_ROWS))
+
+    results = []
+
+    def read():
+        results.append(kline.load_ohlcv("600519.SS", "2026-06-02"))
+
+    with mock.patch.object(kline.requests, "get", side_effect=slow_get):
+        threads = [threading.Thread(target=read) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert len(calls) == 1
+    assert all(frame["Close"].tolist() == results[0]["Close"].tolist() for frame in results)
+
+
+def test_a_window_older_than_the_history_is_asked_for_directly():
+    """A history fetch reaches back a few years; a backtest window before it is
+    not silently served as empty."""
+    old = _payload([["2019-01-02", "10.00", "11.00", "12.00", "9.00", "100"]])
+    with mock.patch.object(kline.requests, "get",
+                           side_effect=[_response(_payload(_ROWS)), _response(old)]) as get:
+        out = kline.get_stock_data("600519.SS", "2019-01-01", "2019-01-05")
+
+    assert get.call_count == 2
+    assert "2019-01-02" in out
+
+
+def test_a_remembered_fetch_expires(monkeypatch):
+    """A quote vendor is not a snapshot service: the cache must not outlive a run."""
+    clock = [1000.0]
+    monkeypatch.setattr(kline.time, "monotonic", lambda: clock[0])
+    with mock.patch.object(kline.requests, "get", return_value=_response(_payload(_ROWS))) as get:
+        kline.load_ohlcv("600519.SS", "2026-06-02")
+        clock[0] += kline.FETCH_TTL_SECONDS + 1
+        kline.load_ohlcv("600519.SS", "2026-06-02")
+
+    assert get.call_count == 2
 
 
 def test_empty_answer_is_reported_as_absence():

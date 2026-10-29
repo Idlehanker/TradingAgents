@@ -213,11 +213,19 @@ def build_default_config() -> dict:
         # routed to vendors you didn't choose. For ordered fallback, list several,
         # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
         "data_vendors": {
-            # Options: alpha_vantage, tencent, yfinance. Switching core_stock_apis
+            # Options: tencent, alpha_vantage, yfinance. Switching core_stock_apis
             # switches every price read: the analyst's CSV, the indicators, the
             # verified snapshot, and the closes a decision is settled against.
-            "core_stock_apis": "yfinance",       # tencent: A-share, HK, US listings
-            "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
+            # Tencent (腾讯自选股) leads because it needs no key and answers from
+            # networks where Yahoo's API is blocked or withdrawn; Yahoo stays
+            # behind it for the symbols Tencent does not quote (futures, FX,
+            # crypto). A comma-separated list is an ordered chain, so a vendor
+            # that is down or lacks the symbol hands the read to the next.
+            "core_stock_apis": "tencent,yfinance",
+            # Indicators are computed locally from whatever core_stock_apis
+            # served, so they follow the quotes vendor instead of being pinned to
+            # one of their own. Options: local, alpha_vantage, yfinance.
+            "technical_indicators": "local",
             # Statements come from SEC EDGAR as filed (US filers), then Yahoo; the
         # overview and insider tools, which SEC EDGAR does not serve, from Yahoo.
         "fundamental_data": "sec_edgar,yfinance",  # Options: sec_edgar, alpha_vantage, yfinance

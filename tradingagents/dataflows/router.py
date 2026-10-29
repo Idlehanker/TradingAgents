@@ -111,6 +111,12 @@ VENDOR_METHODS = {
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
+        # Computed from the OHLCV that core_stock_apis served, so no indicator
+        # API is called and the series cannot disagree with the prices. Named
+        # "local" because it is not Yahoo's: it runs on whatever vendor answered.
+        "local": get_stock_stats_indicators_window,
+        # Kept so an existing "technical_indicators: yfinance" config keeps
+        # working; it is the same local computation.
         "yfinance": get_stock_stats_indicators_window,
     },
     # fundamental_data

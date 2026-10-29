@@ -15,6 +15,51 @@ logger = logging.getLogger(__name__)
 
 YAHOO_HOST = "https://query2.finance.yahoo.com"
 
+# The endpoint yfinance must pass before it will make a data request: without a
+# cookie and a crumb it raises YFRateLimitError, whatever the real cause was.
+CRUMB_URL = f"{YAHOO_HOST}/v1/test/getcrumb"
+
+# Yahoo's announcement for the markets its services were withdrawn from. It is
+# served as an HTTP 403 HTML page, which yfinance reports as a rate limit.
+GEO_BLOCK_MARKER = "no longer be accessible from mainland China"
+
+GEO_BLOCK_MESSAGE = (
+    "Yahoo Finance is not reachable from this network: it answers HTTP 403 with "
+    'its "services are no longer accessible" page instead of the API, so no '
+    "cookie or crumb can be obtained. Retrying does not help — configure another "
+    "vendor (e.g. core_stock_apis tencent) or route the request through a proxy"
+)
+
+# Probed at most once per process: None until the first rate-limit failure asks.
+_geo_blocked: bool | None = None
+
+
+def yahoo_geo_blocked() -> bool:
+    """Whether Yahoo answers this network with its HTTP 403 "withdrawn" page.
+
+    yfinance raises YFRateLimitError when it cannot get a cookie or crumb, so a
+    network Yahoo's services were withdrawn from looks exactly like a 429 that
+    waiting would cure. It is not: no amount of retrying turns a 403 page into
+    data, and the retries only delay the report.
+
+    The probe is made with the browser-impersonating client yfinance itself
+    uses: a bare client gets an edge "Edge: Too Many Requests" instead, which
+    would hide the distinction this function exists to draw.
+    """
+    global _geo_blocked
+    if _geo_blocked is None:
+        try:
+            from curl_cffi import requests as curl_requests
+
+            response = curl_requests.get(CRUMB_URL, impersonate="chrome", timeout=10)
+            _geo_blocked = response.status_code == 403 and GEO_BLOCK_MARKER in (response.text or "")
+        except Exception:  # noqa: BLE001 — a failed probe is "unknown", not a block
+            logger.debug("Yahoo geo-block probe failed; assuming it is not blocked.", exc_info=True)
+            return False
+        if _geo_blocked:
+            logger.warning("Yahoo Finance is geo-blocked from this network (HTTP 403).")
+    return _geo_blocked
+
 
 def price_text(value: float) -> str:
     """A price with six significant digits and at least two decimals.
@@ -35,6 +80,11 @@ def raise_for_empty(symbol: str, canonical: str, what: str) -> None:
     An empty answer from a Yahoo that cannot be reached is not an answer about
     the symbol, so the host is probed before "this symbol has no {what}" is said.
     """
+    if yahoo_geo_blocked():
+        # The page it serves is an HTTP answer, so a reachability probe cannot
+        # tell this apart from "the symbol has no rows" — which would be a claim
+        # about the instrument that nobody checked.
+        raise VendorUnavailableError(GEO_BLOCK_MESSAGE)
     if not vendor_reachable(YAHOO_HOST):
         raise VendorUnavailableError(f"Yahoo Finance is unreachable; no {what} was retrieved")
     raise NoMarketDataError(symbol, canonical, f"no {what}")
@@ -65,18 +115,26 @@ def yf_retry(func, max_retries=3, base_delay=2.0):
     """Execute a yfinance call with exponential backoff on rate limits.
 
     yfinance raises YFRateLimitError on HTTP 429 responses but does not
-    retry them internally, so this wrapper retries them. A rate limit that
-    outlasts the retries, or any other exception, is raised as
-    VendorUnavailableError: it failed in transit and says nothing about the
-    symbol. Yahoo answering that it has nothing for the symbol returns None,
-    an empty answer. ``func`` should build its own Ticker and make the request
-    itself: a Ticker keeps a failed ``info`` fetch as done, so asking the same
-    one again reads an empty profile.
+    retry them internally, so this wrapper retries them. The same error is what
+    yfinance raises when Yahoo answers with its "services withdrawn from this
+    region" page, which no retry can cure, so a blocked network is reported as
+    blocked instead of being slept on. A rate limit that outlasts the retries,
+    or any other exception, is raised as VendorUnavailableError: it failed in
+    transit and says nothing about the symbol. Yahoo answering that it has
+    nothing for the symbol returns None, an empty answer. ``func`` should build
+    its own Ticker and make the request itself: a Ticker keeps a failed ``info``
+    fetch as done, so asking the same one again reads an empty profile.
     """
+    if _geo_blocked:
+        # Established earlier this run: another request cannot answer, and every
+        # tool call does not need to wait out its own timeout to hear the same.
+        raise VendorUnavailableError(GEO_BLOCK_MESSAGE)
     for attempt in range(max_retries + 1):
         try:
             return func()
         except YFRateLimitError as exc:
+            if yahoo_geo_blocked():
+                raise VendorUnavailableError(GEO_BLOCK_MESSAGE) from exc
             if attempt < max_retries:
                 delay = base_delay * (2 ** attempt)
                 logger.warning(f"Yahoo Finance rate limited, retrying in {delay:.0f}s (attempt {attempt + 1}/{max_retries})")

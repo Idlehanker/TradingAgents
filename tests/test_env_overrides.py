@@ -160,7 +160,7 @@ def test_data_vendors_nested_form_reaches_tool_overrides(monkeypatch):
         ),
     )
     assert config["data_vendors"]["news_data"] == "eastmoney"
-    assert config["data_vendors"]["core_stock_apis"] == "yfinance"
+    assert config["data_vendors"]["core_stock_apis"] == "tencent,yfinance"
     assert config["tool_vendors"]["get_insider_transactions"] == "yfinance"
 
 

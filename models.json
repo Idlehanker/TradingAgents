@@ -1,0 +1,170 @@
+{
+    "object": "list",
+    "data": [
+        {
+            "id": "auto",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hy3",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hy3-x",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hy4-preview",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hy4-preview-x",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "default",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-5.3",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-5.3-flash",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-5.2",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-5.0",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-4.7",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-4.6",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "glm-4.6v",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "minimax-m2.5",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kimi-k3-1",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kimi-k2.8-preview",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kimi-k2.5",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kimi-k2-thinking",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "deepseek-v4-flash",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "deepseek-v4.1-flash",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "deepseek-v4-pro",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "deepseek-v3-2-volc",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hunyuan-2.0-thinking",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hunyuan-chat",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hunyuan-image-alpha",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "hunyuan-image-alpha-edit",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "space-bunny",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "step-5-preview",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "mimo-v2.6-pro",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "minimax-m3.1-flash",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kimi-k3.1-pro",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "kling-video-v3",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        },
+        {
+            "id": "minimax-video-h3",
+            "object": "model",
+            "owned_by": "workbuddy-cloud"
+        }
+    ]
+}

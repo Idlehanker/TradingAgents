@@ -17,6 +17,10 @@ from tradingagents.dataflows.vendors.alpha_vantage import (
     get_news as get_alpha_vantage_news,
     get_stock as get_alpha_vantage_stock,
 )
+from tradingagents.dataflows.vendors.eastmoney import (
+    get_global_news as get_eastmoney_global_news,
+    get_news as get_eastmoney_news,
+)
 from tradingagents.dataflows.vendors.fred import get_macro_data as get_fred_macro_data
 from tradingagents.dataflows.vendors.polymarket import (
     get_prediction_markets as get_polymarket_prediction_markets,
@@ -26,6 +30,7 @@ from tradingagents.dataflows.vendors.sec_edgar import (
     get_cashflow as get_sec_edgar_cashflow,
     get_income_statement as get_sec_edgar_income_statement,
 )
+from tradingagents.dataflows.vendors.tencent import get_stock_data as get_tencent_stock_data
 from tradingagents.dataflows.vendors.yahoo.fundamentals import (
     get_balance_sheet as get_yfinance_balance_sheet,
     get_cashflow as get_yfinance_cashflow,
@@ -98,7 +103,10 @@ VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
+        # Kept after yfinance so an unset chain ("default") reads Yahoo first,
+        # as it did before Tencent was available.
         "yfinance": get_YFin_data_online,
+        "tencent": get_tencent_stock_data,
     },
     # technical_indicators
     "get_indicators": {
@@ -129,10 +137,12 @@ VENDOR_METHODS = {
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "eastmoney": get_eastmoney_news,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "eastmoney": get_eastmoney_global_news,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,

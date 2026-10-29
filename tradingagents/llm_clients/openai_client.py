@@ -13,6 +13,7 @@ from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, normalize_content
 from .capabilities import get_capabilities
 from .validators import validate_model
+from .waf_safety import scrub_payload
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,19 @@ class NormalizedChatOpenAI(ChatOpenAI):
 
     def invoke(self, input, config=None, **kwargs):
         return normalize_content(super().invoke(input, config, **kwargs))
+
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        """The JSON about to be sent, with WAF-tripwire text neutralized.
+
+        A relay can sit behind a firewall that answers 403 to a body containing
+        an attack signature, which the SDK raises and the run cannot survive.
+        Only relays are rewritten: a native OpenAI endpoint is not behind such a
+        firewall, and its prompts should arrive exactly as written.
+        """
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        if not _is_native_openai_base_url(self.openai_api_base):
+            scrub_payload(payload)
+        return payload
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         caps = get_capabilities(self.model_name)

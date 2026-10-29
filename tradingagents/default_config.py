@@ -1,3 +1,4 @@
+import json
 import os
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
@@ -74,13 +75,69 @@ def _apply_env_overrides(config: dict) -> dict:
     return config
 
 
+_VENDOR_KEYS = ("data_vendors", "tool_vendors")
+
+
+def _parse_vendor_overrides(raw: str) -> dict[str, dict[str, str]]:
+    """Parse ``TRADINGAGENTS_DATA_VENDORS`` into the config keys it overrides.
+
+    The vendors are a dict of dicts, which a plain scalar override cannot
+    express, so this reads one JSON object and merges it — categories left out
+    keep their defaults.
+
+    Two shapes are accepted. The flat one names categories only, which is the
+    common case::
+
+        {"core_stock_apis": "tencent", "news_data": "eastmoney"}
+
+    The nested one also reaches tool-level overrides, for a tool whose category
+    a vendor cannot serve (``get_insider_transactions`` lives in ``news_data``,
+    which 东方财富 has no data for)::
+
+        {"data_vendors": {"news_data": "eastmoney"},
+         "tool_vendors": {"get_insider_transactions": "yfinance"}}
+
+    A malformed value fails loudly at startup rather than silently leaving the
+    default vendor in place.
+    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in TRADINGAGENTS_DATA_VENDORS: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"Invalid value for TRADINGAGENTS_DATA_VENDORS: expected a JSON object, got {raw!r}"
+        )
+
+    if set(parsed) & set(_VENDOR_KEYS):
+        # The nested form: mixing it with bare category names is ambiguous.
+        if not set(parsed) <= set(_VENDOR_KEYS):
+            raise ValueError(
+                f"Invalid value for TRADINGAGENTS_DATA_VENDORS: {raw!r} mixes category "
+                f"names with {list(_VENDOR_KEYS)}; use one shape or the other"
+            )
+        overrides = {key: parsed.get(key) or {} for key in _VENDOR_KEYS}
+    else:
+        overrides = {"data_vendors": parsed, "tool_vendors": {}}
+
+    for key, mapping in overrides.items():
+        if not isinstance(mapping, dict) or not all(
+            isinstance(name, str) and isinstance(vendor, str) for name, vendor in mapping.items()
+        ):
+            raise ValueError(
+                f"Invalid value for TRADINGAGENTS_DATA_VENDORS: {key} must be a JSON object "
+                f"of name -> vendor string, got {mapping!r}"
+            )
+    return overrides
+
+
 def build_default_config() -> dict:
     """The built-in defaults with the TRADINGAGENTS_* environment folded in.
 
     Read when the package is imported, as DEFAULT_CONFIG; call it again to see
     the environment as it is now.
     """
-    return _apply_env_overrides({
+    config = _apply_env_overrides({
         "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR") or os.path.join(_TRADINGAGENTS_HOME, "logs"),
         "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR") or os.path.join(_TRADINGAGENTS_HOME, "cache"),
         "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH") or os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md"),
@@ -156,12 +213,15 @@ def build_default_config() -> dict:
         # routed to vendors you didn't choose. For ordered fallback, list several,
         # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
         "data_vendors": {
-            "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
+            # Options: alpha_vantage, tencent, yfinance. Switching core_stock_apis
+            # switches every price read: the analyst's CSV, the indicators, the
+            # verified snapshot, and the closes a decision is settled against.
+            "core_stock_apis": "yfinance",       # tencent: A-share, HK, US listings
             "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
             # Statements come from SEC EDGAR as filed (US filers), then Yahoo; the
         # overview and insider tools, which SEC EDGAR does not serve, from Yahoo.
         "fundamental_data": "sec_edgar,yfinance",  # Options: sec_edgar, alpha_vantage, yfinance
-            "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+            "news_data": "yfinance",             # Options: alpha_vantage, eastmoney, yfinance
             "macro_data": "fred",                # Options: fred (needs FRED_API_KEY)
             "prediction_markets": "polymarket",  # Options: polymarket (keyless)
         },
@@ -204,6 +264,14 @@ def build_default_config() -> dict:
         },
 
     })
+    # A nested override, so it is folded in after the scalar ones above:
+    # TRADINGAGENTS_DATA_VENDORS={"core_stock_apis":"tencent"}.
+    vendors = os.environ.get("TRADINGAGENTS_DATA_VENDORS")
+    if vendors:
+        overrides = _parse_vendor_overrides(vendors)
+        for key in _VENDOR_KEYS:
+            config[key].update(overrides[key])
+    return config
 
 
 DEFAULT_CONFIG = build_default_config()

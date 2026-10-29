@@ -8,9 +8,10 @@ from dateutil.relativedelta import relativedelta
 from stockstats import wrap
 
 from tradingagents.dataflows.errors import NoMarketDataError, VendorError
+from tradingagents.dataflows.quotes import load_ohlcv
 from tradingagents.dataflows.symbols import normalize_symbol
 from tradingagents.dataflows.vendors.yahoo.common import price_text, raise_for_empty, yf_retry
-from tradingagents.dataflows.vendors.yahoo.ohlcv import _assert_ohlcv_not_stale, load_ohlcv
+from tradingagents.dataflows.vendors.yahoo.ohlcv import _assert_ohlcv_not_stale
 
 logger = logging.getLogger(__name__)
 

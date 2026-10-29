@@ -137,3 +137,41 @@ def test_unknown_env_var_is_ignored(monkeypatch):
         TRADINGAGENTS_NONEXISTENT_KEY="oops",
     )
     assert "nonexistent_key" not in config
+
+
+def test_data_vendors_flat_form_sets_one_category(monkeypatch):
+    """The common shape names categories; the rest keep their defaults."""
+    config = _config_with_env(
+        monkeypatch,
+        TRADINGAGENTS_DATA_VENDORS='{"core_stock_apis":"tencent"}',
+    )
+    assert config["data_vendors"]["core_stock_apis"] == "tencent"
+    assert config["data_vendors"]["news_data"] == "yfinance"
+    assert config["tool_vendors"] == {}
+
+
+def test_data_vendors_nested_form_reaches_tool_overrides(monkeypatch):
+    """A tool whose category a vendor cannot serve is overridden on its own."""
+    config = _config_with_env(
+        monkeypatch,
+        TRADINGAGENTS_DATA_VENDORS=(
+            '{"data_vendors":{"news_data":"eastmoney"},'
+            '"tool_vendors":{"get_insider_transactions":"yfinance"}}'
+        ),
+    )
+    assert config["data_vendors"]["news_data"] == "eastmoney"
+    assert config["data_vendors"]["core_stock_apis"] == "yfinance"
+    assert config["tool_vendors"]["get_insider_transactions"] == "yfinance"
+
+
+@pytest.mark.parametrize("raw", [
+    "not json",
+    '["core_stock_apis"]',
+    '{"core_stock_apis": 1}',
+    '{"data_vendors": {"news_data": "eastmoney"}, "core_stock_apis": "tencent"}',
+])
+def test_data_vendors_invalid_value_raises(monkeypatch, raw):
+    """A malformed override fails at startup instead of leaving a default in place."""
+    monkeypatch.setenv("TRADINGAGENTS_DATA_VENDORS", raw)
+    with pytest.raises(ValueError, match="TRADINGAGENTS_DATA_VENDORS"):
+        default_config_module.build_default_config()

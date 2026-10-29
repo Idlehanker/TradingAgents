@@ -59,7 +59,7 @@ Full release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 <div align="center">
 
-🚀 [TradingAgents](#tradingagents-framework) | ⚡ [Installation & CLI](#installation-and-cli) | 🎬 [Demo](https://www.youtube.com/watch?v=90gr5lwjIho) | 📦 [Package Usage](#tradingagents-package) | 🤝 [Contributing](#contributing) | 📄 [Citation](#citation)
+🚀 [TradingAgents](#tradingagents-framework) | ⚡ [Installation & CLI](#installation-and-cli) | 🖥 [Web GUI](#web-gui) | 🎬 [Demo](https://www.youtube.com/watch?v=90gr5lwjIho) | 📦 [Package Usage](#tradingagents-package) | 🤝 [Contributing](#contributing) | 📄 [Citation](#citation)
 
 </div>
 
@@ -139,6 +139,8 @@ Install the package and its dependencies (`uv pip install .` with uv):
 ```bash
 pip install .
 ```
+
+Add `pip install ".[web]"` for the browser dashboard described under [Web GUI](#web-gui); the CLI does not need it.
 
 ### Docker
 
@@ -223,7 +225,7 @@ A saved report also includes `complete_report.html`, the report as one page with
 
 ### Markets and tickers
 
-TradingAgents works with any market Yahoo Finance covers, using the exchange-suffixed ticker. Company identity and the alpha benchmark resolve automatically per market.
+TradingAgents takes the exchange-suffixed ticker of any market the configured vendors cover — 腾讯自选股 for A-shares, Hong Kong and US listings, Yahoo Finance for the rest — and resolves company identity and the alpha benchmark automatically per market. See [Data vendors](#data-vendors) for the default chain and how to change it.
 
 - US: `AAPL`, `SPY`
 - Hong Kong: `0700.HK` · Tokyo: `7203.T` · London: `AZN.L`
@@ -244,6 +246,128 @@ An interface will appear showing results as they load, letting you track the age
 <p align="center">
   <img src="assets/cli/cli_transaction.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
+
+### Web GUI
+
+The same analysis in a browser: a React dashboard over a FastAPI backend that streams the graph's progress while it runs, instead of repainting a terminal.
+
+```bash
+pip install ".[web]"                 # fastapi + uvicorn
+cd webui && npm install && npm run build && cd ..
+python -m webapi.server              # http://127.0.0.1:8788
+```
+
+`tradingagents-web` is the same entry point. `TRADINGAGENTS_WEB_HOST` and `TRADINGAGENTS_WEB_PORT` move it, and the usual `TRADINGAGENTS_*` variables still decide provider, endpoint, models, rounds and language — the run form only asks for what changes per analysis. The built UI is served by the same process, so one port is enough; the OpenAPI page is at `/api/docs`.
+
+For front-end work, run the dev server instead. It proxies `/api` and `/ws` to port 8788, so start the backend too:
+
+```bash
+cd webui && npm run dev              # http://127.0.0.1:5173
+```
+
+| Panel | What it shows |
+|---|---|
+| Agent pipeline | The five teams (analysts, research, trader, risk, portfolio) with each agent's status, the completed count and what is being written right now |
+| Live activity | Messages and tool calls as they arrive, interleaved in one timeline, filterable by type; long entries collapse |
+| Reports | One tab per report section, filled in as each agent files it, with the unfiled ones naming the agent still working |
+| Portfolio Manager decision | The rating, its headline fields (`Price target`, `Time horizon`, …) and the decision text |
+| Stats bar | Elapsed time, LLM calls, tool calls, tokens in/out, agents and reports done, and whether the stream is live |
+| Runs / History | The runs of this session, and every decision already recorded on disk for that ticker and date |
+
+Everything the terminal view derives is derived here the same way: an analyst is `in_progress` until its own report lands, the research team starts when all selected analysts have filed, and the risk debate follows the trader's plan. `Cancel` stops the run after the current step; reports, the state log and the memory log are still written for a run that completes.
+
+One analysis runs at a time: `TradingAgentsGraph` installs its config process-wide, so a second request queues behind the first rather than reading another run's settings. The queue depth shows in the run's status.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/config` | The effective provider, endpoint, models, rounds, language and paths (never keys) |
+| `GET /api/runs`, `GET /api/runs/{id}` | Run list and one run's full snapshot |
+| `POST /api/runs` | Start a run: `ticker`, `analysis_date`, `analysts`, `asset_type`, and optional model/round/language overrides |
+| `POST /api/runs/{id}/cancel`, `DELETE /api/runs/{id}` | Ask a run to stop, or drop it from memory |
+| `GET /api/history`, `GET /api/history/{ticker}/{date}` | Decisions already recorded under `results_dir`, newest first |
+| `WS /ws/runs/{id}` | A full snapshot on connect, then `status`, `agents`, `message`, `tool_call`, `report`, `stats`, `decision` and `error` deltas |
+
+Live runs are held in the process's memory, so restarting the server forgets them — the files under `results_dir` do not, and the History tab reads those back.
+
+#### Logs
+
+The web service writes rotating logs, one file per level, into `{results_dir}/web` (`~/.tradingagents/logs/web` by default):
+
+| File | Holds |
+|---|---|
+| `trace.log` | Everything, i.e. TRACE and up |
+| `debug.log` | DEBUG and up: graph construction, checkpoint thread, tool calls, report sizes |
+| `info.log` | INFO and up: run created, status changes, agent completions, the rating, HTTP requests, WebSocket connects |
+| `error.log` | ERROR and up: failed runs with their traceback |
+
+TRACE is a level of our own, below DEBUG: every message, every streamed chunk with its state keys, every event delivered to a browser, and every status transition. That is the level that explains a run which stalls rather than fails, so it sits behind its own switch — a normal run writes thousands of these lines.
+
+Switches, in `.env` (a blank value means "unset" and keeps the default):
+
+```bash
+TRADINGAGENTS_LOG_ENABLED=1        # every file handler; 0 turns logging off
+TRADINGAGENTS_LOG_DIR=             # unset: {results_dir}/web
+TRADINGAGENTS_LOG_TRACE=0          # trace.log (TRACE and up); off by default
+TRADINGAGENTS_LOG_DEBUG=1          # debug.log
+TRADINGAGENTS_LOG_INFO=1           # info.log
+TRADINGAGENTS_LOG_ERROR=1          # error.log
+TRADINGAGENTS_LOG_LEVEL=info       # console level: trace|debug|info|warning|error
+TRADINGAGENTS_LOG_CONSOLE=1        # echo to stderr alongside the files
+TRADINGAGENTS_LOG_PAYLOADS=0       # include message and report bodies at TRACE
+TRADINGAGENTS_LOG_MAX_BYTES=10485760
+TRADINGAGENTS_LOG_BACKUPS=5        # rotated files kept per level
+TRADINGAGENTS_LOG_LIBRARIES=0      # let httpx/langchain/uvicorn log at their own level
+```
+
+`PAYLOADS=1` puts the text itself in `trace.log` — analyst messages, report bodies, tool arguments — which is what you want when reproducing a bad decision, and is why it is off by default. `LIBRARIES=1` releases the clamp that holds third-party loggers at WARNING; uvicorn's per-socket protocol trace is the reason that clamp exists.
+
+Each line carries the time, level, logger and thread, and run work is named after its run, so one analysis can be pulled out with a filter:
+
+```bash
+grep "run=3f2a1c9b8d4e" ~/.tradingagents/logs/web/info.log
+```
+
+### Data vendors
+
+Every price read — the analyst's CSV, the indicators, the verified snapshot, and the closes a decision is settled against — comes from one chain of vendors, chosen per category. The defaults need no key and no configuration:
+
+| Category | Default | Serves |
+|---|---|---|
+| `core_stock_apis` | `tencent,yfinance` | Every price read |
+| `technical_indicators` | `local` | Computed from those prices, no indicator API |
+| `fundamental_data` | `sec_edgar,yfinance` | Statements as filed, then Yahoo |
+| `news_data` | `yfinance` | Ticker and market news |
+| `macro_data` | `fred` | FRED series (needs `FRED_API_KEY`) |
+| `prediction_markets` | `polymarket` | Market-implied probabilities |
+
+A category is an ordered chain, tried in order. `tencent` (腾讯自选股, no key: A-shares, Hong Kong and US listings, plus a few indices) leads because Yahoo's API is withdrawn from some networks; `yfinance` follows it for the symbols Tencent does not quote — futures, FX, crypto, other regions. A vendor that fails in transit, or does not quote the symbol, hands the read to the next one.
+
+Set the chain in `.env` as JSON. Categories you leave out keep their defaults:
+
+```bash
+# Tencent first, Yahoo behind it — the default, written out
+TRADINGAGENTS_DATA_VENDORS={"core_stock_apis":"tencent,yfinance"}
+
+# Tencent only: never touch Yahoo, at the cost of every symbol Tencent does not quote
+TRADINGAGENTS_DATA_VENDORS={"core_stock_apis":"tencent"}
+
+# Chinese-language news from 东方财富 (no key) alongside Tencent prices
+TRADINGAGENTS_DATA_VENDORS={"core_stock_apis":"tencent","news_data":"eastmoney"}
+```
+
+A leading `export`, a single-quoted value, and the nested shape are all accepted. The nested shape is what a tool-level override needs, since `get_insider_transactions` lives in `news_data`, which 东方财富 does not serve:
+
+```bash
+TRADINGAGENTS_DATA_VENDORS={"data_vendors":{"core_stock_apis":"tencent","news_data":"eastmoney"},"tool_vendors":{"get_insider_transactions":"yfinance"}}
+```
+
+`.env` is found from the working directory upward, so start TradingAgents from the directory that holds it. Check what a run will use with:
+
+```bash
+python -c "from tradingagents.default_config import DEFAULT_CONFIG as c; print(c['data_vendors'])"
+```
+
+Naming one vendor is not the same as listing a chain: `{"core_stock_apis":"tencent"}` reports `NO_DATA_AVAILABLE` for a symbol Tencent does not quote, where the default chain falls through to Yahoo. Yahoo answering with its "services are no longer accessible" page is reported as a network block and is not retried — no retry turns a 403 page into data; name another vendor, or route the request through a proxy.
 
 ## TradingAgents Package
 

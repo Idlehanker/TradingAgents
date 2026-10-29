@@ -41,15 +41,21 @@ dev = [
 bedrock = [
     "langchain-aws>=1.7.9",
 ]
+# Web GUI: the FastAPI backend behind webui/. Install with pip install "tradingagents[web]".
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
+tradingagents-web = "webapi.server:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "tradingagents.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "webapi*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]

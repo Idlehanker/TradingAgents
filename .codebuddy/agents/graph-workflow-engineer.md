@@ -37,7 +37,8 @@ Modify `tradingagents/graph/` and the state/registration edges it depends on (`t
 6. Seed the new key in `propagation.py`.
 7. Export the factory from `tradingagents/agents/__init__.py`.
 8. Add the report section to `reporting._SECTIONS` if the output must reach disk.
-9. Extend `tests/test_analyst_execution.py`, `tests/test_graph_end_to_end.py`, `tests/test_risk_router_path_map.py`.
+9. Mirror the new node in `webapi/runs.py` (`ANALYST_ORDER`, `ANALYST_AGENT_NAMES`, `ANALYST_REPORT_MAP`, `SECTIONS`), or the dashboard shows no panel for it.
+10. Extend `tests/test_analyst_execution.py`, `tests/test_graph_end_to_end.py`, `tests/test_risk_router_path_map.py`.
 
 ## Verification
 
@@ -51,3 +52,5 @@ Then report: which nodes/edges changed, whether old checkpoints are invalidated,
 ## Reporting back
 
 Return a short diff summary (files touched, symbols changed), the exact verification command you ran with its result, and any invariant you had to relax. Flag uncertainty instead of guessing about edge coverage.
+
+Doc duty: any change you make here must leave this definition, `tradingagents-graph`, and its `references/symbol-map.md` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

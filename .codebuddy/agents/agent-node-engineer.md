@@ -60,3 +60,5 @@ pytest -m unit
 ```
 
 Report the archetype you used, every file touched (including graph registration), and the verification result.
+
+Doc duty: any change you make here must leave this definition and `tradingagents-agents` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

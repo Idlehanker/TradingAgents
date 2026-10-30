@@ -76,3 +76,5 @@ pytest -m unit
 ```
 
 Symbol-level detail: `references/symbol-map.md`.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

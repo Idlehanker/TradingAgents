@@ -21,7 +21,8 @@ Four small modules shared by the CLI and the web API. Everything here is output 
 1. Confirm the data already exists in `AgentState` — otherwise it is a graph change first (`tradingagents-graph` skill).
 2. Append to `_SECTIONS` with a stable filename and the correct state path.
 3. Check the numbered ordering and that the HTML page picks it up automatically.
-4. Extend `tests/test_reporting.py` and `tests/test_report_html.py`.
+4. Add the same state key to `SECTIONS` in `webapi/runs.py` (and `ANALYST_REPORT_MAP` for an analyst section), or the web UI never shows it — see `tradingagents-web`.
+5. Extend `tests/test_reporting.py` and `tests/test_report_html.py`.
 
 Never maintain a second section list inside `report_html.py`.
 
@@ -50,6 +51,10 @@ Two pieces:
 - `_ENV_OVERRIDES` — the **only** env→config mapping (`TRADINGAGENTS_*`). Never read `os.environ` at a call site.
 - `build_default_config()` → `DEFAULT_CONFIG`. Runtime merging happens in `dataflows.config.set_config` (one-level deep merge over the defaults).
 
+Documented exception: `TRADINGAGENTS_WEB_HOST` / `TRADINGAGENTS_WEB_PORT` (uvicorn, `webapi/server.py`) and the `TRADINGAGENTS_LOG_*` switches (`webapi/logging_setup.py`) are read straight from the environment because they configure the server before any config exists. They are not config keys — do not add them to `_ENV_OVERRIDES`, and keep `.env.example` in step.
+
+`data_vendors` defaults are documented inline and mirrored in `.env.example`: `core_stock_apis` = `tencent,yfinance`, `technical_indicators` = `local`, `fundamental_data` = `sec_edgar,yfinance`, `news_data` = `yfinance`. `GET /api/config` exposes the effective provider/models/analyst options the web form renders.
+
 ### Add a config key
 
 1. Add the default. The type of the default drives env coercion, so choose deliberately (`None` means "unset", not `False`).
@@ -65,3 +70,5 @@ python -m cli.main --ticker AAPL --date 2026-01-15 --analysts market --save --no
 ```
 
 Report which sections or config keys changed and whether previously saved reports and memory entries remain readable.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

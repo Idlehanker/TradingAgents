@@ -48,3 +48,5 @@ pytest -m unit tests/test_memory_log.py tests/test_memory_pointintime.py tests/t
 ```
 
 Report whether existing on-disk logs remain readable, and whether any entry written before your change will be silently dropped.
+
+Doc duty: any change you make here must leave this definition and `tradingagents-memory` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

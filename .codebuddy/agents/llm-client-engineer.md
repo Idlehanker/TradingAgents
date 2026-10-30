@@ -46,3 +46,5 @@ pytest -m unit tests/test_provider_registry.py tests/test_capabilities.py tests/
 ```
 
 Report which registry entries changed, whether the model is quick-tier, deep-tier, or both, and any capability downgrade an agent must expect (for example no native tool calling, which forces the structured fallback path).
+
+Doc duty: any change you make here must leave this definition and `tradingagents-llm-clients` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

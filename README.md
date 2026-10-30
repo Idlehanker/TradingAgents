@@ -251,19 +251,70 @@ An interface will appear showing results as they load, letting you track the age
 
 The same analysis in a browser: a React dashboard over a FastAPI backend that streams the graph's progress while it runs, instead of repainting a terminal.
 
+#### One-key start
+
 ```bash
-pip install ".[web]"                 # fastapi + uvicorn
+python scripts/start_web.py
+```
+
+Then open <http://127.0.0.1:8788>. The script does the whole sequence and stops on Ctrl+C:
+
+1. checks the prerequisites below and refuses to guess — a missing one prints the exact command that fixes it;
+2. stops with the install command if the Python `[web]` extra is missing, and runs `npm install` only when `webui/node_modules` is absent;
+3. builds the dashboard (`npm run build`, i.e. `tsc --noEmit` + Vite) only when `webui/dist` is absent;
+4. starts `webapi`, which serves the API and the built UI from **one** port.
+
+| Flag | Effect |
+|---|---|
+| `--check` | Report every prerequisite and exit (exit code 1 if something is missing). Nothing is started. |
+| `--dev` | Backend on `--port` with `--reload` plus the Vite dev server on 5173 (HMR, proxying `/api` and `/ws`) |
+| `--port`, `--host` | Bind address; defaults `127.0.0.1:8788`, also settable with `TRADINGAGENTS_WEB_HOST` / `TRADINGAGENTS_WEB_PORT` |
+| `--no-build` | Serve the existing `webui/dist`; fail instead of building |
+| `--skip-install` | Never run `npm install` |
+
+Check the environment without starting anything:
+
+```bash
+python scripts/start_web.py --check
+#   [ok  ] python web extra (fastapi, uvicorn)
+#   [ok  ] node / npm
+#   [ok  ] webui/node_modules
+#   [MISS] webui/dist (built UI)  ->  npm run build   (in webui/), or drop --no-build
+```
+
+#### Manual start
+
+The script is a convenience wrapper around these commands; use them directly if you prefer:
+
+```bash
+pip install -e ".[web]"              # from the repository root — there is no pyproject.toml in webapi/
 cd webui && npm install && npm run build && cd ..
 python -m webapi.server              # http://127.0.0.1:8788
+# or: tradingagents-web              (same entry point, console script)
 ```
 
-`tradingagents-web` is the same entry point. `TRADINGAGENTS_WEB_HOST` and `TRADINGAGENTS_WEB_PORT` move it, and the usual `TRADINGAGENTS_*` variables still decide provider, endpoint, models, rounds and language — the run form only asks for what changes per analysis. The built UI is served by the same process, so one port is enough; the OpenAPI page is at `/api/docs`.
-
-For front-end work, run the dev server instead. It proxies `/api` and `/ws` to port 8788, so start the backend too:
+For front-end work, run the two processes yourself instead of `--dev`:
 
 ```bash
-cd webui && npm run dev              # http://127.0.0.1:5173
+python -m webapi.server              # terminal 1 — backend on 8788
+cd webui && npm run dev              # terminal 2 — dashboard on http://localhost:5173
 ```
+
+`TRADINGAGENTS_WEB_HOST` and `TRADINGAGENTS_WEB_PORT` move the backend, and the usual
+`TRADINGAGENTS_*` variables still decide provider, endpoint, models, rounds and language —
+the run form only asks for what changes per analysis. The built UI is served by the same
+process, so one port is enough; the OpenAPI page is at `/api/docs`.
+
+| What | Where | Notes |
+|---|---|---|
+| Dashboard + API | `127.0.0.1:8788` | Single-port mode; `webui/dist` is served by `webapi` |
+| Dashboard (dev) | `localhost:5173` | Vite; proxies `/api` and `/ws` to the backend port |
+| API docs | `127.0.0.1:8788/api/docs` | OpenAPI, always available |
+| Health | `127.0.0.1:8788/api/health` | `{ok, version, busy}` — `busy` is true while a run is queued or running |
+| Logs | `~/.tradingagents/logs/web/` | See [Logs](#logs) |
+
+Development notes for each half — module layout, endpoints, threading, event flow, build
+output: [`webapi/README.md`](webapi/README.md) and [`webui/README.md`](webui/README.md).
 
 | Panel | What it shows |
 |---|---|
@@ -326,6 +377,18 @@ Each line carries the time, level, logger and thread, and run work is named afte
 ```bash
 grep "run=3f2a1c9b8d4e" ~/.tradingagents/logs/web/info.log
 ```
+
+#### Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found` | `pip install -e ".[web]"` was run inside `webapi/` or `webui/`. Go to the repository root, or use `pip install -e "..[web]"` in place. |
+| Browser gets a JSON 404 at `/` (or "UI build not found.") | `webui/dist` is missing. `python scripts/start_web.py` builds it; or `npm run build` in `webui/`. The API keeps working either way. |
+| `Address already in use` on 8788 | Another server holds the port: `python scripts/start_web.py --port 8899`, or stop the other one. |
+| `npm` not found | Node 18+ is needed only to build or hot-reload the dashboard; with a built `dist` the API serves it without Node. |
+| A run sits at `Queued` and never starts | Only one analysis runs at a time. `/api/health` reports `busy`; the run starts when the current one finishes. |
+| WebSocket closes with code `4404` | The server restarted and no longer holds that run in memory — live runs are process-local. The History tab still reads what was written to `results_dir`. |
+| `pytest -m unit` is green but the dashboard tests never ran | `tests/test_webapi_*.py` carry no `pytestmark`, so `-m unit` deselects them. Name the files explicitly. |
 
 ### Data vendors
 

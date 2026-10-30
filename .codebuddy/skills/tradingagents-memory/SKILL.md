@@ -53,3 +53,5 @@ pytest -m unit tests/test_memory_log.py tests/test_memory_pointintime.py tests/t
 ```
 
 `tests/test_memory_log.py` is the largest test file in the repo — read the relevant case before changing parsing behaviour. Always report whether pre-existing on-disk entries stay readable.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

@@ -42,7 +42,7 @@ Supporting modules: `display.py` (console helpers), `prefs.py` (remembered selec
 
 1. **Headless stays headless.** With `--ticker` and `--date` supplied, nothing may block on input. Note that `tests/conftest.py` forces `isatty=True`, so a careless prompt breaks the suite rather than only interactive use.
 2. **Always pass flags explicitly** down the call chain; do not read module-level globals.
-3. **Never touch `os.environ`.** Go through `dataflows.config` / `default_config` so the web API sees the same values.
+3. **Never touch `os.environ`.** Go through `dataflows.config` / `default_config` so the web API sees the same values. (The web server's own host/port and `TRADINGAGENTS_LOG_*` switches are the documented exception and live in `webapi/`.)
 4. **Exit non-zero on validation failure** before any graph work starts — this is what makes the CLI usable in scripts.
 5. `--no-show` must not launch a browser; `_offer_reports` is the only place that opens anything.
 6. Print saved paths once, unescaped and stable — users parse them.
@@ -70,3 +70,5 @@ python -m cli.main --ticker AAPL --date 2026-01-15 --analysts market --save --no
 ```
 
 Report the flags or commands touched, whether interactive mode changed, and the smoke-test output.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

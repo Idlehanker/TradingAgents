@@ -31,6 +31,7 @@ Edit these files in this order — a partial edit produces a graph that imports 
 5. `tradingagents/graph/propagation.py` — seed the new report key in `create_initial_state`.
 6. `tradingagents/graph/setup.py` — register the factory in `analyst_factories`; the loop over the execution plan wires the node and its edge.
 7. `tradingagents/reporting.py` — add the section to `_SECTIONS` so it reaches disk.
+8. `webapi/runs.py` — add the key to `ANALYST_ORDER`, `ANALYST_AGENT_NAMES`, `ANALYST_REPORT_MAP` and `SECTIONS`, or the dashboard never shows the new analyst (`tradingagents-web`).
 
 Note the naming split: the selection key is `social`, the graph node is the sentiment analyst, and the state field is `sentiment_report`.
 
@@ -64,3 +65,5 @@ pytest -m unit
 `tests/test_risk_router_path_map.py` exists specifically to catch path-map gaps — if a new route is not covered there, extend that test rather than relying on the end-to-end run.
 
 Symbol-level detail: `references/symbol-map.md`.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

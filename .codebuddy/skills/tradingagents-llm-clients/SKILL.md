@@ -55,3 +55,5 @@ pytest -m unit tests/test_provider_registry.py tests/test_capabilities.py tests/
 ```
 
 When reporting, state explicitly: provider name, model ids added, tier(s) available, and any capability downgrade callers must tolerate.
+
+Keep this skill current: a code change here is not done until this file (and its `references/`) describe it — see *Rule — agents and skills track the code* in `AGENTS.md`.

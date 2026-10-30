@@ -33,7 +33,7 @@ Own `cli/` — `main.py` (Typer app), `run.py` (analysis pipeline + Rich Live UI
 2. Thread it through `run_analysis` / `_build_run_config` (or `_offer_reports` for output-only flags).
 3. If it maps to config, add the key and `TRADINGAGENTS_*` env override in `default_config.py` (`reporting-engineer`'s territory — coordinate).
 4. Update the README usage block and `--help` text.
-5. Add coverage in `tests/test_cli_options.py` or the nearest `tests/test_cli_*.py`.
+5. Add coverage in `tests/test_cli_commands.py` or the nearest `tests/test_cli_*.py`.
 
 ## Procedure — add a subcommand
 
@@ -50,3 +50,5 @@ python -m cli.main --help
 ```
 
 Report the flags or commands added, whether interactive mode changed, and paste the non-interactive smoke-test result.
+
+Doc duty: any change you make here must leave this definition and `tradingagents-cli` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

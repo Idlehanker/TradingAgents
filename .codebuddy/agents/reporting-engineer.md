@@ -16,12 +16,13 @@ Own `tradingagents/reporting.py`, `tradingagents/report_html.py`, `tradingagents
 - `report_html.render_report(ticker, final_state, settings, parts) -> str` produces one self-contained HTML page; markdown is converted with `markdown-it-py`.
 - `portfolio.py` — `Position`, `PortfolioContext` (`positions_in`, `position_in`, `render(ticker)`, `fingerprint()`), `load_portfolio(path)`; validation failures must surface before any analysis starts.
 - `backtest.py` — `iter_grid(start_date, end_date, every_n_days=1)`, `run_backtest(tickers, dates, config, asset_type="stock", portfolio=None, selected_analysts=(...), run_id=None, progress=None)`, `summarize(source)`, `BacktestResult`, `RatingScore`, `_DIRECTION`.
-- `default_config.py` — `_ENV_OVERRIDES` is the only env→config mapping; `build_default_config()` assembles `DEFAULT_CONFIG`. `dataflows.config.set_config` deep-merges one level over `DEFAULT_CONFIG`.
+- `default_config.py` — `_ENV_OVERRIDES` is the only env→config mapping; `build_default_config()` assembles `DEFAULT_CONFIG`. `dataflows.config.set_config` deep-merges one level over `DEFAULT_CONFIG`. The `data_vendors` block defaults to `core_stock_apis: tencent,yfinance` and `technical_indicators: local`; `.env.example` mirrors the same block — keep both in step.
+- Environment-only settings, deliberately outside `_ENV_OVERRIDES` because the server needs them before config exists: `TRADINGAGENTS_WEB_HOST`/`TRADINGAGENTS_WEB_PORT` (`webapi/server.py`) and the `TRADINGAGENTS_LOG_*` switches (`webapi/logging_setup.py`).
 
 ## Invariants
 
 1. `reporting._SECTIONS` is the single source of truth. The HTML renderer follows it automatically — never hand-maintain a second section list.
-2. Every new config key needs three things: a default in `build_default_config()`, an entry in `_ENV_OVERRIDES` (`TRADINGAGENTS_*`), and a doc line. Types are inferred from the default value; booleans and numbers are coerced, so pick the default type carefully.
+2. Every new config key needs three things: a default in `build_default_config()`, an entry in `_ENV_OVERRIDES` (`TRADINGAGENTS_*`), and a doc line. Types are inferred from the default value; booleans and numbers are coerced, so pick the default type carefully. Web/log switches are the documented exception — they stay environment-only.
 3. Report output shape is a contract for the memory log and the web UI. Adding a section is safe; renaming an existing `report_key` is not.
 4. Backtests must use an isolated `memory_log_path` and `run_id`; never write into `~/.tradingagents/memory/trading_memory.md`.
 
@@ -46,3 +47,5 @@ python -m cli.main --ticker AAPL --date 2026-01-15 --analysts market --save --no
 ```
 
 Report which sections or keys changed, whether existing saved reports and memory entries remain compatible, and the exact command you ran.
+
+Doc duty: any change you make here must leave this definition and `tradingagents-reporting` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.

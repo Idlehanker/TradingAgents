@@ -17,7 +17,15 @@ Own `tradingagents/dataflows/` — `router.py`, `config.py`, `symbols.py`, `date
 - `router.get_category_for_method(method)` and `router.get_vendor(category, method)` resolve config; per-tool `tool_vendors` overrides per-category `data_vendors`. `"default"` means "all vendors registered for this method".
 - `router.route_to_vendor(method, *args, **kwargs)` walks the comma-separated chain **in order and only that chain**. There is no silent fallback to a vendor the user did not configure.
 - Failures map to `vendor_unavailable()` / `no_data_available()` sentinel strings; vendors raise `NoMarketDataError`, `VendorUnavailableError`, or `VendorNotConfiguredError` from `errors.py`.
-- `quotes.load_ohlcv` / `quotes.get_closes` are the single price entry point, restricted to `_PRICE_VENDORS = ("tencent", "yfinance")`.
+- Defaults: `core_stock_apis` is the ordered chain `"tencent,yfinance"` (Tencent needs no key and answers where Yahoo's API is blocked; Yahoo stays behind it for futures/FX/crypto). `technical_indicators` is `"local"`, computed from the quotes OHLCV.
+- `quotes.load_ohlcv` / `quotes.get_closes` are the single price entry point. `_price_chain()` filters the configured chain down to `_PRICE_VENDORS = ("tencent", "yfinance")` and falls back to `_NO_VENDOR_NAMED = ("yfinance",)` when the chain names none; each reader is a hard-coded dict, so a price vendor must be added to `_PRICE_VENDORS` and both dicts.
+- In `quotes`, a `VendorUnavailableError` outranks another vendor's `NoMarketDataError`: never let a symbol be reported absent by a vendor that never answered.
+
+## Vendor behaviour that outlives a single call
+
+- Tencent K-line caches one fetch for `FETCH_TTL_SECONDS = 900` behind `_FETCH_LOCK`, keyed on `(symbol, start, end, count)`. Parallel analyst tool calls read the same window a dozen times; the cache is what keeps one report from quoting two closes for one session. Route new Tencent price paths through `fetch_daily`.
+- Both OHLCV loaders end with `_assert_ohlcv_not_stale`; a frame older than the request is an error, not data.
+- Yahoo geo-block: `yahoo_geo_blocked()` probes the crumb URL once per process and detects the HTTP 403 "services are no longer accessible" page, which yfinance otherwise reports as a rate limit. It caches the verdict and raises `VendorUnavailableError(GEO_BLOCK_MESSAGE)` directly — do not add retries or backoff for it.
 
 ## Vendor contract
 
@@ -32,9 +40,9 @@ Own `tradingagents/dataflows/` — `router.py`, `config.py`, `symbols.py`, `date
 
 1. Create `vendors/<name>/` (or a single module) and export the surface from its `__init__.py`.
 2. Import it in `router.py` and add entries under the relevant `VENDOR_METHODS[method]`.
-3. If it supplies prices, add it to `quotes._PRICE_VENDORS`.
-4. Update the `data_vendors` defaults and comments in `tradingagents/default_config.py`.
-5. Add coverage in `tests/test_vendor_routing.py` and `tests/test_vendor_errors.py`.
+3. If it supplies prices, add it to `quotes._PRICE_VENDORS` **and** to both reader dicts in `quotes.load_ohlcv` / `quotes.get_closes`.
+4. Update the `data_vendors` defaults and comments in `tradingagents/default_config.py`, and the matching block in `.env.example`.
+5. Add coverage in `tests/test_vendor_routing.py` and `tests/test_vendor_errors.py`; price work also earns `tests/test_quotes_fallback.py`.
 
 ## Procedure — add a data method
 
@@ -47,7 +55,11 @@ Own `tradingagents/dataflows/` — `router.py`, `config.py`, `symbols.py`, `date
 ## Verification
 
 ```bash
-pytest -m unit tests/test_vendor_routing.py tests/test_vendor_errors.py tests/test_no_data_handling.py tests/test_tool_date_enforcement.py
+pytest -m unit tests/test_vendor_routing.py tests/test_vendor_errors.py tests/test_no_data_handling.py \
+  tests/test_tool_date_enforcement.py tests/test_quotes_fallback.py tests/test_tencent_vendor.py \
+  tests/test_yahoo_geo_block.py tests/test_yahoo_rate_limit.py
 ```
 
 Network is blocked by default in `tests/conftest.py`; only `-m integration` tests may hit vendors. State explicitly which chain order you introduced and whether behaviour differs for optional categories.
+
+Doc duty: any change you make here must leave this definition, `tradingagents-dataflows`, and its `references/router-map.md` describing the new state — see *Rule — agents and skills track the code* in `AGENTS.md`.
